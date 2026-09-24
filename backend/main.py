@@ -1,10 +1,7 @@
 from fastapi import FastAPI
-
-app = FastAPI(title="OpsPilot API")
-
-@app.get("/health")
-def health_check():
+app = FastAPI(title="OpsPilot")
+@app.get("/")
+def root():
     return {
-        "status": "ok",
         "message": "OpsPilot backend is running"
     }
