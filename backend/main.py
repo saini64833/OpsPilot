@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import Base, engine, SessionLocal
-from routers import orders, riders, proposals, ocr, stream
+from routers import orders, riders, proposals, ocr, stream, audit
 from services.simulator import run_simulator
 
 
@@ -31,6 +31,7 @@ app.include_router(riders.router)
 app.include_router(proposals.router)
 app.include_router(ocr.router)
 app.include_router(stream.router)
+app.include_router(audit.router)
 
 
 @app.get("/health")
