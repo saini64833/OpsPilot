@@ -1,35 +1,23 @@
-from enum import Enum
+import enum
+import uuid
 from datetime import datetime
 
-from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    Float,
-    DateTime,
-    Enum as SQLEnum,
-    ForeignKey,
-    JSON,
-)
+from sqlalchemy import Column, String, Float, Enum, DateTime, ForeignKey, Text
+from sqlalchemy.orm import relationship
 
 from database import Base
 
 
-class OrderStatus(str, Enum):
+class OrderStatus(str, enum.Enum):
     UNASSIGNED = "UNASSIGNED"
     ASSIGNED = "ASSIGNED"
     IN_TRANSIT = "IN_TRANSIT"
     DELIVERED = "DELIVERED"
     FAILED = "FAILED"
+    UNPLACED = "UNPLACED"  # address could not be confidently determined
 
 
-class OrderPriority(str, Enum):
-    LOW = "LOW"
-    MEDIUM = "MEDIUM"
-    HIGH = "HIGH"
-
-
-class OrderSource(str, Enum):
+class OrderSource(str, enum.Enum):
     TYPED = "typed"
     PHOTO = "photo"
 
@@ -37,58 +25,29 @@ class OrderSource(str, Enum):
 class Order(Base):
     __tablename__ = "orders"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
 
-    # Pickup location
-    pickup_lat = Column(Float, nullable=False)
-    pickup_lng = Column(Float, nullable=False)
-    pickup_label = Column(String(255), nullable=False)
+    pickup_label = Column(String, nullable=True)
+    pickup_lat = Column(Float, nullable=True)
+    pickup_lng = Column(Float, nullable=True)
 
-    # Delivery
-    delivery_address = Column(String(500), nullable=False)
+    delivery_address = Column(Text, nullable=True)
+    delivery_lat = Column(Float, nullable=True)
+    delivery_lng = Column(Float, nullable=True)
 
-    weight = Column(Float, nullable=False)
+    weight = Column(Float, nullable=False, default=1.0)
+    priority = Column(String, nullable=False, default="normal")  # low | normal | high
 
-    priority = Column(
-        SQLEnum(OrderPriority),
-        default=OrderPriority.MEDIUM,
-        nullable=False
-    )
+    status = Column(Enum(OrderStatus), nullable=False, default=OrderStatus.UNASSIGNED)
+    source = Column(Enum(OrderSource), nullable=False, default=OrderSource.TYPED)
 
-    # Nullable because an order can initially be UNASSIGNED
-    rider_id = Column(
-        Integer,
-        ForeignKey("riders.id"),
-        nullable=True,
-        index=True
-    )
+    rider_id = Column(String, ForeignKey("riders.id"), nullable=True)
 
-    status = Column(
-        SQLEnum(OrderStatus),
-        default=OrderStatus.UNASSIGNED,
-        nullable=False,
-        index=True
-    )
-
-    source = Column(
-        SQLEnum(OrderSource),
-        default=OrderSource.TYPED,
-        nullable=False
-    )
-
-    # OCR information
-    raw_ocr_text = Column(String(5000), nullable=True)
+    image_path = Column(String, nullable=True)
+    raw_ocr_text = Column(Text, nullable=True)
     ocr_confidence = Column(Float, nullable=True)
 
-    created_at = Column(
-        DateTime,
-        default=datetime.utcnow,
-        nullable=False
-    )
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    updated_at = Column(
-        DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
-        nullable=False
-    )
+    rider = relationship("Rider", back_populates="orders")

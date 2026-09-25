@@ -1,31 +1,31 @@
-from enum import Enum
+import enum
+import uuid
 
-from sqlalchemy import Column, Integer, String, Float, Enum as SQLEnum
+from sqlalchemy import Column, String, Float, Enum
+from sqlalchemy.orm import relationship
 
-class RiderStatus(str, Enum):
+from database import Base
+
+
+class RiderStatus(str, enum.Enum):
     ACTIVE = "active"
     BROKEN_DOWN = "broken_down"
     OFFLINE = "offline"
 
 
-from database import Base
-
-
 class Rider(Base):
     __tablename__ = "riders"
 
-    id = Column(Integer, primary_key=True, index=True)
-
-    name = Column(String(100), nullable=False)
-
-    capacity_weight = Column(Float, nullable=False)
-    current_load = Column(Float, default=0.0, nullable=False)
-
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, nullable=False)
+    capacity_weight = Column(Float, nullable=False, default=20.0)
+    current_load = Column(Float, nullable=False, default=0.0)
     lat = Column(Float, nullable=False)
     lng = Column(Float, nullable=False)
+    status = Column(Enum(RiderStatus), nullable=False, default=RiderStatus.ACTIVE)
 
-    status = Column(
-        SQLEnum(RiderStatus),
-        default=RiderStatus.ACTIVE,
-        nullable=False
-    )
+    orders = relationship("Order", back_populates="rider")
+
+    @property
+    def remaining_capacity(self) -> float:
+        return self.capacity_weight - self.current_load

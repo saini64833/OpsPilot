@@ -1,25 +1,18 @@
-from enum import Enum
+import enum
+import uuid
 from datetime import datetime
 
-from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    DateTime,
-    Enum as SQLEnum,
-    ForeignKey,
-    JSON,
-)
+from sqlalchemy import Column, String, DateTime, Enum, JSON
 
 from database import Base
 
 
-class ProposalType(str, Enum):
+class ProposalType(str, enum.Enum):
     ADDRESS_CLEANUP = "address_cleanup"
     REASSIGNMENT = "reassignment"
 
 
-class ProposalStatus(str, Enum):
+class ProposalStatus(str, enum.Enum):
     PENDING = "pending"
     EDITED = "edited"
     ACCEPTED = "accepted"
@@ -27,54 +20,27 @@ class ProposalStatus(str, Enum):
 
 
 class Proposal(Base):
+    """An AI-generated suggestion that has NOT taken effect yet.
+
+    Nothing outside routers/proposals.py is allowed to flip a proposal to
+    ACCEPTED/EDITED and apply it to Order/Rider state - that boundary is what
+    keeps every AI suggestion behind explicit dispatcher approval.
+    """
+
     __tablename__ = "proposals"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    type = Column(Enum(ProposalType), nullable=False)
 
-    type = Column(
-        SQLEnum(ProposalType),
-        nullable=False
-    )
+    target_order_id = Column(String, nullable=True)
+    target_rider_id = Column(String, nullable=True)
 
-    target_order_id = Column(
-        Integer,
-        ForeignKey("orders.id"),
-        nullable=True,
-        index=True
-    )
+    proposed_payload = Column(JSON, nullable=False)
+    final_payload = Column(JSON, nullable=True)  # set if dispatcher edits before applying
 
-    target_rider_id = Column(
-        Integer,
-        ForeignKey("riders.id"),
-        nullable=True,
-        index=True
-    )
+    status = Column(Enum(ProposalStatus), nullable=False, default=ProposalStatus.PENDING)
+    reason = Column(String, nullable=True)
 
-    # Proposed changes from LLM
-    proposed_payload = Column(
-        JSON,
-        nullable=False
-    )
-
-    status = Column(
-        SQLEnum(ProposalStatus),
-        default=ProposalStatus.PENDING,
-        nullable=False,
-        index=True
-    )
-
-    created_at = Column(
-        DateTime,
-        default=datetime.utcnow,
-        nullable=False
-    )
-
-    resolved_at = Column(
-        DateTime,
-        nullable=True
-    )
-
-    resolved_by = Column(
-        String(100),
-        nullable=True
-    )
+    created_at = Column(DateTime, default=datetime.utcnow)
+    resolved_at = Column(DateTime, nullable=True)
+    resolved_by = Column(String, nullable=True)
