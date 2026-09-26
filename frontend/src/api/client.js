@@ -55,6 +55,10 @@ export const api = {
     }),
 
   getAuditLog: () => request("/audit-log/"),
+    // Live rider -> destination road route (rider -> pickup while ASSIGNED,
+    // rider -> delivery once IN_TRANSIT). Routed through the backend rather
+    // than calling OSRM directly from the browser, per services/road_routing.py.
+  getOrderRoute: (orderId) => request(`/routes/order/${orderId}`),
 
   uploadOcrImage: async (orderId, file) => {
     const formData = new FormData();

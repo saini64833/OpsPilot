@@ -119,7 +119,7 @@ export default function NewOrderForm() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full py-1.5 rounded text-xs font-medium text-[var(--color-bg)] disabled:opacity-50"
+          className="w-full py-1.5 rounded text-xs font-medium text-bg disabled:opacity-50"
           style={{ background: "var(--color-accent)" }}
         >
           {submitting ? "Creating…" : "Create order"}

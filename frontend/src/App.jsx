@@ -20,7 +20,7 @@ function TickerStat({ label, value, color }) {
       >
         {value}
       </span>
-      <span className="text-xs text-[var(--color-text-muted)]">{label}</span>
+      <span className="text-xs text-text-muted">{label}</span>
     </div>
   );
 }
@@ -43,7 +43,7 @@ function TopBar({ counts }) {
           }}
         />
         <span className="font-semibold tracking-tight">OpsPilot</span>
-        <span className="text-xs text-[var(--color-text-muted)]">
+        <span className="text-xs text-text-muted">
           dispatch console
         </span>
       </div>
@@ -75,7 +75,7 @@ function RidersPanel({ riders, onBreakdown, onRestore }) {
   return (
     <Panel title="Riders" accent="var(--color-status-active)">
       {riders.length === 0 ? (
-        <div className="py-6 text-center text-xs text-[var(--color-text-muted)]">
+        <div className="py-6 text-center text-xs text-text-muted">
           No riders available.
         </div>
       ) : (
@@ -92,7 +92,7 @@ function RidersPanel({ riders, onBreakdown, onRestore }) {
             return (
               <li
                 key={r.id}
-                className="rounded-lg border p-3 transition hover:bg-[var(--color-bg)]"
+                className="rounded-lg border p-3 transition hover:bg-bg"
                 style={{
                   borderColor: "var(--color-border)",
                 }}
@@ -124,11 +124,11 @@ function RidersPanel({ riders, onBreakdown, onRestore }) {
                 {/* Capacity */}
                 <div className="mt-3">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] text-[var(--color-text-muted)]">
+                    <span className="text-[10px] text-text-muted">
                       Load
                     </span>
 
-                    <span className="font-mono text-[10px] text-[var(--color-text-muted)]">
+                    <span className="font-mono text-[10px] text-text-muted">
                       {r.current_load} / {r.capacity_weight} kg
                     </span>
                   </div>
@@ -159,7 +159,7 @@ function RidersPanel({ riders, onBreakdown, onRestore }) {
                   {r.status === "active" ? (
                     <button
                       disabled={isLoading}
-                      className="text-[11px] font-medium text-[var(--color-status-broken)] hover:underline disabled:opacity-50"
+                      className="text-[11px] font-medium text-(--color-status-broken) hover:underline disabled:opacity-50"
                       onClick={async () => {
                         try {
                           setActionRider(r.id);
@@ -174,7 +174,7 @@ function RidersPanel({ riders, onBreakdown, onRestore }) {
                   ) : r.status === "broken_down" ? (
                     <button
                       disabled={isLoading}
-                      className="rounded-md border px-2.5 py-1 text-[11px] font-medium text-[var(--color-status-active)] hover:bg-[var(--color-bg)] disabled:opacity-50"
+                      className="rounded-md border px-2.5 py-1 text-[11px] font-medium text-(--color-status-active) hover:bg-bg disabled:opacity-50"
                       style={{
                         borderColor: "var(--color-status-active)",
                       }}
@@ -190,7 +190,7 @@ function RidersPanel({ riders, onBreakdown, onRestore }) {
                       {isLoading ? "Restoring..." : "Restore rider"}
                     </button>
                   ) : (
-                    <span className="text-[10px] text-[var(--color-text-muted)]">
+                    <span className="text-[10px] text-text-muted">
                       No actions
                     </span>
                   )}

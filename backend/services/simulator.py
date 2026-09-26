@@ -1,18 +1,24 @@
-"""Nudges active riders toward a next-stop position each tick and broadcasts
-the update over the WebSocket. This is a placeholder movement model for the
-one-day simulation - swap the movement rule for "toward next assigned
-order's pickup/delivery" once you want real route-following."""
+"""Simulates live rider movement and broadcasts updates over WebSocket."""
 
 import asyncio
 from typing import Callable, Awaitable
 
 from models import Rider, RiderStatus
 
+
 STEP_DEGREES = 0.0005
 
 
-async def simulation_tick(db, broadcast: Callable[[dict], Awaitable[None]]):
-    riders = db.query(Rider).filter(Rider.status == RiderStatus.ACTIVE).all()
+async def simulation_tick(
+    db,
+    broadcast: Callable[[dict], Awaitable[None]]
+):
+    riders = (
+        db.query(Rider)
+        .filter(Rider.status == RiderStatus.ACTIVE)
+        .all()
+    )
+
     if not riders:
         return
 
@@ -22,25 +28,39 @@ async def simulation_tick(db, broadcast: Callable[[dict], Awaitable[None]]):
 
     db.commit()
 
-    await broadcast(
-        {
-            "type": "riders_updated",
-            "riders": [
-                {"id": r.id, "lat": r.lat, "lng": r.lng, "status": r.status.value}
-                for r in riders
-            ],
-        }
-    )
+    data = {
+        "type": "riders_updated",
+        "riders": [
+            {
+                "id": r.id,
+                "lat": r.lat,
+                "lng": r.lng,
+                "status": r.status.value,
+            }
+            for r in riders
+        ],
+    }
+
+    print("Broadcasting rider update:", data)
+
+    await broadcast(data)
 
 
-async def run_simulator(session_factory, broadcast, interval_seconds: float = 3.0):
+async def run_simulator(
+    session_factory,
+    broadcast,
+    interval_seconds: float = 3.0
+):
     while True:
         db = session_factory()
+
         try:
             await simulation_tick(db, broadcast)
-        except Exception:
-            # A simulator hiccup should never take the whole app down.
-            pass
+
+        except Exception as e:
+            print("SIMULATOR ERROR:", repr(e))
+
         finally:
             db.close()
+
         await asyncio.sleep(interval_seconds)

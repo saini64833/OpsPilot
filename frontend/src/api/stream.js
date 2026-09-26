@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import { BASE_URL } from "./client";
 
-// Subscribes to the backend's live WebSocket feed (rider position/status
-// updates) and calls onMessage for every parsed event. Reconnects on drop.
+// Subscribes to the backend's live WebSocket feed
+// and calls onMessage for every parsed event.
 export function useLiveStream(onMessage) {
   const wsRef = useRef(null);
   const onMessageRef = useRef(onMessage);
@@ -19,6 +19,8 @@ export function useLiveStream(onMessage) {
     function connect() {
       if (cancelled) return;
 
+      console.log("Connecting WebSocket:", wsUrl);
+
       socket = new WebSocket(wsUrl);
       wsRef.current = socket;
 
@@ -28,29 +30,34 @@ export function useLiveStream(onMessage) {
 
       socket.onmessage = (event) => {
         try {
-          onMessageRef.current(JSON.parse(event.data));
+          const data = JSON.parse(event.data);
+
+          console.log("WebSocket message:", data);
+
+          onMessageRef.current(data);
         } catch (e) {
-          console.error("Failed to parse live update", e);
+          console.error("Failed to parse live update:", e);
+          console.error("Raw WebSocket message:", event.data);
         }
       };
 
-      socket.onclose = () => {
-        console.log("WebSocket disconnected");
+      socket.onerror = (error) => {
+        console.error("WebSocket error:", error);
+      };
+
+      socket.onclose = (event) => {
+        console.log(
+          "WebSocket disconnected",
+          "code:",
+          event.code,
+          "reason:",
+          event.reason
+        );
 
         if (!cancelled) {
-          reconnectTimer = setTimeout(connect, 2000);
-        }
-      };
-
-      socket.onerror = () => {
-        console.error("WebSocket error");
-
-        // Don't manually close an already closed socket.
-        if (
-          socket.readyState === WebSocket.CONNECTING ||
-          socket.readyState === WebSocket.OPEN
-        ) {
-          socket.close();
+          reconnectTimer = setTimeout(() => {
+            connect();
+          }, 2000);
         }
       };
     }
