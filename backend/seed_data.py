@@ -3,26 +3,29 @@
 from database import Base, engine, SessionLocal
 from models import Rider, Order, RiderStatus
 
+# Clears out old data so you get a fresh map every time you run this script
+Base.metadata.drop_all(bind=engine)
 Base.metadata.create_all(bind=engine)
 db = SessionLocal()
 
 riders = [
-    Rider(name="Rider A", capacity_weight=20, current_load=0, lat=28.6139, lng=77.2090, status=RiderStatus.ACTIVE),
-    Rider(name="Rider B", capacity_weight=15, current_load=0, lat=28.6200, lng=77.2150, status=RiderStatus.ACTIVE),
-    Rider(name="Rider C", capacity_weight=25, current_load=0, lat=28.6300, lng=77.2000, status=RiderStatus.ACTIVE),
+    # Placed right next to Order 1 for immediate pickup
+    Rider(name="Fast Rider A", capacity_weight=20, current_load=0, lat=28.6140, lng=77.2090, status=RiderStatus.ACTIVE),
 ]
 db.add_all(riders)
 db.commit()
 
 orders = [
+    # Order 1: Will be picked up and delivered quickly
     Order(
         pickup_label="Store 1", pickup_lat=28.6145, pickup_lng=77.2095,
-        delivery_address="12 MG Road", delivery_lat=28.6180, delivery_lng=77.2120,
+        delivery_address="Delivery 1", delivery_lat=28.6180, delivery_lng=77.2120,
         weight=3, priority="high",
     ),
+    # Order 2: Waiting exactly at the drop-off point of Order 1 to demonstrate sequence
     Order(
-        pickup_label="Warehouse 2", pickup_lat=28.6250, pickup_lng=77.2100,
-        delivery_address="45 Park Street", delivery_lat=28.6280, delivery_lng=77.2140,
+        pickup_label="Store 2", pickup_lat=28.6180, pickup_lng=77.2120,
+        delivery_address="Delivery 2", delivery_lat=28.6250, delivery_lng=77.2100,
         weight=5, priority="normal",
     ),
 ]
