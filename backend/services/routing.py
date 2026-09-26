@@ -48,3 +48,19 @@ def assign_order(db: Session, order: Order) -> bool:
     order.rider_id = rider.id
     order.status = OrderStatus.ASSIGNED
     return True
+def assign_unassigned_orders(db: Session) -> int:
+    """Try to assign all currently unassigned orders."""
+
+    orders = (
+        db.query(Order)
+        .filter(Order.status == OrderStatus.UNASSIGNED)
+        .all()
+    )
+
+    assigned_count = 0
+
+    for order in orders:
+        if assign_order(db, order):
+            assigned_count += 1
+
+    return assigned_count

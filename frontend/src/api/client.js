@@ -16,28 +16,60 @@ async function request(path, options = {}) {
 export const api = {
   getOrders: () => request("/orders/"),
   getOrder: (id) => request(`/orders/${id}`),
-  createOrder: (payload) => request("/orders/", { method: "POST", body: JSON.stringify(payload) }),
+  createOrder: (payload) =>
+    request("/orders/", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 
   getRiders: () => request("/riders/"),
-  createRider: (payload) => request("/riders/", { method: "POST", body: JSON.stringify(payload) }),
-  breakdownRider: (id) => request(`/riders/${id}/breakdown`, { method: "POST" }),
+  createRider: (payload) =>
+    request("/riders/", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 
-  getProposals: (status) => request(`/proposals/${status ? `?status=${status}` : ""}`),
+  breakdownRider: (id) =>
+    request(`/riders/${id}/breakdown`, {
+      method: "POST",
+    }),
+
+  restoreRider: (id) =>
+    request(`/riders/${id}/restore`, {
+      method: "POST",
+    }),
+
+  getProposals: (status) =>
+    request(`/proposals/${status ? `?status=${status}` : ""}`),
+
   acceptProposal: (id, payload = {}) =>
-    request(`/proposals/${id}/accept`, { method: "POST", body: JSON.stringify(payload) }),
+    request(`/proposals/${id}/accept`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
   rejectProposal: (id, payload = {}) =>
-    request(`/proposals/${id}/reject`, { method: "POST", body: JSON.stringify(payload) }),
+    request(`/proposals/${id}/reject`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 
   getAuditLog: () => request("/audit-log/"),
 
   uploadOcrImage: async (orderId, file) => {
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch(`${BASE_URL}/orders/${orderId}/ocr`, { method: "POST", body: formData });
+
+    const res = await fetch(`${BASE_URL}/orders/${orderId}/ocr`, {
+      method: "POST",
+      body: formData,
+    });
+
     if (!res.ok) {
       const body = await res.text();
       throw new Error(`${res.status} ${res.statusText}: ${body}`);
     }
+
     return res.json();
   },
 };
