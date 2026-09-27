@@ -8,15 +8,13 @@ from services.audit import log_action
 from services.llm_address_cleanup import clean_address
 from services.ocr_service import run_ocr
 from services.routing import assign_order
+from services.geocoder import get_coordinates_from_text 
 
 router = APIRouter(prefix="/orders", tags=["ocr"])
 
-
 @router.post("/{order_id}/ocr")
 async def process_photo_order(order_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
-    """Image -> OCR -> LLM structuring -> confidence gate -> assignment.
-    Every failure branch marks the order UNPLACED (never a crash, never a
-    silent guess) and preserves whatever was already extracted."""
+    """Image -> OCR -> LLM structuring -> Geocoding -> confidence gate -> assignment."""
     order = db.query(Order).get(order_id)
     if not order:
         raise HTTPException(404, "Order not found")
@@ -24,6 +22,7 @@ async def process_photo_order(order_id: str, file: UploadFile = File(...), db: S
     image_bytes = await file.read()
     order.source = OrderSource.PHOTO
 
+    # 1. Run OCR
     try:
         raw_text, ocr_conf = run_ocr(image_bytes)
     except Exception as e:
@@ -34,12 +33,10 @@ async def process_photo_order(order_id: str, file: UploadFile = File(...), db: S
 
     order.raw_ocr_text = raw_text
     order.ocr_confidence = ocr_conf
-    log_action(
-        db, "order", order.id, "system", "ocr_extracted",
-        raw_payload={"text": raw_text, "confidence": ocr_conf},
-    )
+    log_action(db, "order", order.id, "system", "ocr_extracted", raw_payload={"text": raw_text, "confidence": ocr_conf})
     db.commit()
 
+    # 2. Run LLM Cleanup
     try:
         cleaned = clean_address(raw_text)
     except Exception as e:
@@ -49,10 +46,7 @@ async def process_photo_order(order_id: str, file: UploadFile = File(...), db: S
         raise HTTPException(502, "Address cleanup failed - retry or enter manually")
 
     if cleaned.confidence == "low" or ocr_conf < settings.OCR_CONFIDENCE_THRESHOLD:
-        log_action(
-            db, "order", order.id, "system", "llm_low_confidence",
-            raw_payload=cleaned.model_dump(),
-        )
+        log_action(db, "order", order.id, "system", "llm_low_confidence", raw_payload=cleaned.model_dump())
         order.status = OrderStatus.UNPLACED
         db.commit()
         return {"status": "unplaced", "raw_text": raw_text, "cleaned": cleaned.model_dump()}
@@ -61,7 +55,30 @@ async def process_photo_order(order_id: str, file: UploadFile = File(...), db: S
         part for part in [cleaned.street, cleaned.city, cleaned.state, cleaned.zip] if part
     )
     log_action(db, "order", order.id, "system", "address_cleaned", raw_payload=cleaned.model_dump())
+    
+    # 3. Geocode the address into map coordinates
+    lat, lng = get_coordinates_from_text(order.delivery_address)
+    
+    if not lat or not lng:
+        # If we can't find it on the map, leave it UNPLACED for a human dispatcher
+        log_action(db, "order", order.id, "system", "geocoding_failed", notes="Could not map coordinates")
+        order.status = OrderStatus.UNPLACED
+        db.commit()
+        return {"status": "unplaced", "error": "Address read successfully, but map location not found."}
+    
+    # Save the coordinates to the order
+    order.delivery_lat = lat
+    order.delivery_lng = lng
+
+    # 4. Assign the order to a rider
     assign_order(db, order)
     db.commit()
     db.refresh(order)
-    return {"status": "placed", "order_id": order.id, "delivery_address": order.delivery_address}
+    
+    return {
+        "status": "placed", 
+        "order_id": order.id, 
+        "delivery_address": order.delivery_address,
+        "delivery_lat": order.delivery_lat,
+        "delivery_lng": order.delivery_lng
+    }

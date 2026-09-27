@@ -11,6 +11,8 @@ db = SessionLocal()
 riders = [
     # Placed right next to Order 1 for immediate pickup
     Rider(name="Fast Rider A", capacity_weight=20, current_load=0, lat=28.6140, lng=77.2090, status=RiderStatus.ACTIVE),
+    Rider(name="Fast Rider B", capacity_weight=20, current_load=0, lat=28.6150, lng=77.2090, status=RiderStatus.ACTIVE),
+        
 ]
 db.add_all(riders)
 db.commit()
