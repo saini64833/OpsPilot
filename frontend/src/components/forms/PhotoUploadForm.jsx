@@ -11,8 +11,7 @@ const inputCls =
 export default function PhotoUploadForm() {
   const { dispatch } = useAppState();
   const [pickupLabel, setPickupLabel] = useState("");
-  const [pickupLat, setPickupLat] = useState("");
-  const [pickupLng, setPickupLng] = useState("");
+  const [pickupAddress, setPickupAddress] = useState("");
   const [weight, setWeight] = useState("");
   const [priority, setPriority] = useState("normal");
   const [file, setFile] = useState(null);
@@ -32,8 +31,7 @@ export default function PhotoUploadForm() {
     try {
       const order = await api.createOrder({
         pickup_label: pickupLabel || null,
-        pickup_lat: parseFloat(pickupLat),
-        pickup_lng: parseFloat(pickupLng),
+        pickup_address: pickupAddress,
         weight: parseFloat(weight),
         priority,
       });
@@ -70,22 +68,13 @@ export default function PhotoUploadForm() {
           value={pickupLabel}
           onChange={(e) => setPickupLabel(e.target.value)}
         />
-        <div className="flex gap-2">
-          <input
-            className={inputCls}
-            placeholder="Pickup lat"
-            value={pickupLat}
-            onChange={(e) => setPickupLat(e.target.value)}
-            required
-          />
-          <input
-            className={inputCls}
-            placeholder="Pickup lng"
-            value={pickupLng}
-            onChange={(e) => setPickupLng(e.target.value)}
-            required
-          />
-        </div>
+        <input
+          className={inputCls}
+          placeholder="Pickup address (e.g. 12 MG Road, Dhanbad)"
+          value={pickupAddress}
+          onChange={(e) => setPickupAddress(e.target.value)}
+          required
+        />
         <div className="flex gap-2">
           <input
             className={inputCls}

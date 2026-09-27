@@ -38,7 +38,7 @@ def create_rider(
 
 
 @router.post("/{rider_id}/restore", response_model=RiderOut)
-def restore_rider(
+async def restore_rider(
     rider_id: str,
     db: Session = Depends(get_db),
 ):
@@ -78,7 +78,7 @@ def restore_rider(
     #
     # Only orders whose rider_id is NULL and status is UNASSIGNED
     # are eligible for normal routing.
-    assigned_count = assign_unassigned_orders(db)
+    assigned_count = await assign_unassigned_orders(db)
 
     log_action(
         db,

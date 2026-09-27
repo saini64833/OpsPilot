@@ -5,11 +5,8 @@ import Panel from "../ui/Panel";
 
 const initial = {
   pickup_label: "",
-  pickup_lat: "",
-  pickup_lng: "",
+  pickup_address: "",
   delivery_address: "",
-  delivery_lat: "",
-  delivery_lng: "",
   weight: "",
   priority: "normal",
 };
@@ -34,11 +31,8 @@ export default function NewOrderForm() {
     try {
       const payload = {
         pickup_label: form.pickup_label || null,
-        pickup_lat: parseFloat(form.pickup_lat),
-        pickup_lng: parseFloat(form.pickup_lng),
+        pickup_address: form.pickup_address,
         delivery_address: form.delivery_address || null,
-        delivery_lat: form.delivery_lat ? parseFloat(form.delivery_lat) : null,
-        delivery_lng: form.delivery_lng ? parseFloat(form.delivery_lng) : null,
         weight: parseFloat(form.weight),
         priority: form.priority,
       };
@@ -62,42 +56,19 @@ export default function NewOrderForm() {
           value={form.pickup_label}
           onChange={(e) => update("pickup_label", e.target.value)}
         />
-        <div className="flex gap-2">
-          <input
-            className={inputCls}
-            placeholder="Pickup lat"
-            value={form.pickup_lat}
-            onChange={(e) => update("pickup_lat", e.target.value)}
-            required
-          />
-          <input
-            className={inputCls}
-            placeholder="Pickup lng"
-            value={form.pickup_lng}
-            onChange={(e) => update("pickup_lng", e.target.value)}
-            required
-          />
-        </div>
+        <input
+          className={inputCls}
+          placeholder="Pickup address (e.g. 12 MG Road, Dhanbad)"
+          value={form.pickup_address}
+          onChange={(e) => update("pickup_address", e.target.value)}
+          required
+        />
         <input
           className={inputCls}
           placeholder="Delivery address"
           value={form.delivery_address}
           onChange={(e) => update("delivery_address", e.target.value)}
         />
-        <div className="flex gap-2">
-          <input
-            className={inputCls}
-            placeholder="Delivery lat"
-            value={form.delivery_lat}
-            onChange={(e) => update("delivery_lat", e.target.value)}
-          />
-          <input
-            className={inputCls}
-            placeholder="Delivery lng"
-            value={form.delivery_lng}
-            onChange={(e) => update("delivery_lng", e.target.value)}
-          />
-        </div>
         <div className="flex gap-2">
           <input
             className={inputCls}

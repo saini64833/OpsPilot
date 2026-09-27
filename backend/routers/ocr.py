@@ -71,7 +71,7 @@ async def process_photo_order(order_id: str, file: UploadFile = File(...), db: S
     order.delivery_lng = lng
 
     # 4. Assign the order to a rider
-    assign_order(db, order)
+    await assign_order(db, order)
     db.commit()
     db.refresh(order)
     

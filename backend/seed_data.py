@@ -1,7 +1,10 @@
 """Run inside the backend container or venv: python seed_data.py"""
 
+import asyncio
+
 from database import Base, engine, SessionLocal
 from models import Rider, Order, RiderStatus
+from services.routing import assign_order
 
 # Clears out old data so you get a fresh map every time you run this script
 Base.metadata.drop_all(bind=engine)
@@ -20,18 +23,36 @@ db.commit()
 orders = [
     # Order 1: Will be picked up and delivered quickly
     Order(
-        pickup_label="Store 1", pickup_lat=28.6145, pickup_lng=77.2095,
-        delivery_address="Delivery 1", delivery_lat=28.6180, delivery_lng=77.2120,
+        pickup_label="Store 1", pickup_address="Store 1, Connaught Place, New Delhi",
+        pickup_lat=28.6145, pickup_lng=77.2095,
+        delivery_address="Delivery 1, Connaught Place, New Delhi",
+        delivery_lat=28.6180, delivery_lng=77.2120,
         weight=3, priority="high",
     ),
     # Order 2: Waiting exactly at the drop-off point of Order 1 to demonstrate sequence
     Order(
-        pickup_label="Store 2", pickup_lat=28.6180, pickup_lng=77.2120,
-        delivery_address="Delivery 2", delivery_lat=28.6250, delivery_lng=77.2100,
+        pickup_label="Store 2", pickup_address="Store 2, Connaught Place, New Delhi",
+        pickup_lat=28.6180, pickup_lng=77.2120,
+        delivery_address="Delivery 2, Connaught Place, New Delhi",
+        delivery_lat=28.6250, delivery_lng=77.2100,
         weight=5, priority="normal",
     ),
 ]
 db.add_all(orders)
+db.flush()  # give each order an id before assignment references it
+
+
+async def assign_all():
+    for order in orders:
+        await assign_order(db, order)
+
+
+asyncio.run(assign_all())
 db.commit()
 
 print(f"Seeded {len(riders)} riders and {len(orders)} orders.")
+for order in orders:
+    print(
+        f"  {order.pickup_label}: {order.status.value}"
+        + (f" -> rider {order.rider_id}" if order.rider_id else "")
+    )

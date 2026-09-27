@@ -77,35 +77,6 @@ async def simulation_tick(
                         order.status = OrderStatus.DELIVERED
                         rider.current_load -= order.weight
                         print(f"ORDER {order.id}: Delivered!")
-        active_order = (
-            db.query(Order)
-            .filter(Order.rider_id == rider.id, Order.status == OrderStatus.ASSIGNED)
-            .first()
-        )
-        
-        if active_order:
-            route = await get_road_route(
-                start_lat=rider.lat,
-                start_lng=rider.lng,
-                end_lat=active_order.pickup_lat,
-                end_lng=active_order.pickup_lng
-            )
-            
-            if route and len(route["coordinates"]) > 1:
-                # Look slightly ahead in the route array (e.g., the 4th node) 
-                # to avoid getting bottlenecked by nodes that are 1 meter apart.
-                target_idx = min(3, len(route["coordinates"]) - 1)
-                next_step_lng, next_step_lat = route["coordinates"][target_idx]
-                
-                d_lat = next_step_lat - rider.lat
-                d_lng = next_step_lng - rider.lng
-                distance = (d_lat**2 + d_lng**2)**0.5
-                
-                if distance > 0:
-                    # Force the rider to utilize the FULL step size to ensure high speed
-                    move_dist = min(STEP_SIZE, distance)
-                    rider.lat += (d_lat / distance) * move_dist
-                    rider.lng += (d_lng / distance) * move_dist
 
     db.commit()
 
@@ -140,5 +111,3 @@ async def run_simulator(
         finally:
             db.close()
         await asyncio.sleep(interval_seconds)
-        
-        

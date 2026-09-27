@@ -28,6 +28,7 @@ class Order(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
 
     pickup_label = Column(String, nullable=True)
+    pickup_address = Column(Text, nullable=True)
     pickup_lat = Column(Float, nullable=True)
     pickup_lng = Column(Float, nullable=True)
 
