@@ -1,16 +1,10 @@
-import { MapContainer, TileLayer } from "react-leaflet";
+// frontend/src/components/map/MapView.jsx
+import { MapContainer, TileLayer, Polyline } from "react-leaflet";
 import RiderMarker from "./RiderMarker";
 import OrderMarker from "./OrderMarker";
 import { useAppState } from "../../store/useAppState";
 
-// Center matches the seed data (Delhi) - swap if you seed a different city.
 const DEFAULT_CENTER = [28.6139, 77.209];
-
-// CARTO's raster basemaps now require a free API key (as of Aug 2026) -
-// without one every tile is watermarked "API KEY REQUIRED". Get one free at
-// https://carto.com/basemaps/apikey/ and put it in frontend/.env as
-// VITE_CARTO_API_KEY. With no key set, we fall back to plain OpenStreetMap
-// tiles so the map still works, just without the dark styling.
 const CARTO_KEY = import.meta.env.VITE_CARTO_API_KEY;
 
 const TILE_URL = CARTO_KEY
@@ -34,9 +28,25 @@ export default function MapView() {
       style={{ background: "var(--color-bg)" }}
     >
       <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} />
+      
       {riders.map((rider) => (
-        <RiderMarker key={rider.id} rider={rider} />
+        <div key={rider.id}>
+          <RiderMarker rider={rider} />
+          
+          {/* Only draw path if rider is active and has a route */}
+          {rider.status === "active" && rider.route && (
+            <Polyline
+              // Backend sends [lng, lat], Leaflet expects [lat, lng]
+              positions={rider.route.map((coord) => [coord[1], coord[0]])}
+              color="#3b82f6" // Blue path color
+              weight={4}
+              dashArray="6, 8" // Optional: makes the line dashed
+              opacity={0.7}
+            />
+          )}
+        </div>
       ))}
+      
       {orders.map((order) => (
         <OrderMarker key={order.id} order={order} />
       ))}
