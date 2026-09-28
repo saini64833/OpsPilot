@@ -10,8 +10,10 @@ import io
 import torch
 from PIL import Image, ImageEnhance, ImageChops
 from transformers import TrOCRProcessor, VisionEncoderDecoderModel
+
 _processor = None
 _model = None
+
 def auto_crop_whitespace(image: Image.Image) -> Image.Image:
     """Automatically removes excess solid-color background before OCR."""
     # Get the background color from the top-left pixel
@@ -71,6 +73,7 @@ def run_ocr(image_bytes: bytes) -> tuple[str, float]:
         io.BytesIO(image_bytes)
     ).convert("RGB")
     image = auto_crop_whitespace(image)
+    
     # ---------------------------------
     # 1. Upscale small images
     # ---------------------------------
@@ -89,6 +92,7 @@ def run_ocr(image_bytes: bytes) -> tuple[str, float]:
     # 2. Convert to grayscale
     # ---------------------------------
     image = image.convert("RGB")
+    
     # ---------------------------------
     # 3. Increase contrast
     # ---------------------------------
@@ -110,6 +114,7 @@ def run_ocr(image_bytes: bytes) -> tuple[str, float]:
             pixel_values,
             output_scores=True,
             return_dict_in_generate=True,
+            max_new_tokens=100, # FIX: Allows up to 100 tokens to prevent cut-offs
         )
 
     # ---------------------------------
@@ -119,6 +124,7 @@ def run_ocr(image_bytes: bytes) -> tuple[str, float]:
         outputs.sequences,
         skip_special_tokens=True,
     )[0].strip()
+    
     # ---------------------------------
     # 7. Estimate confidence
     # ---------------------------------

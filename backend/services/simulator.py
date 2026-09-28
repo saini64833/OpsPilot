@@ -5,7 +5,9 @@ from sqlalchemy.orm import Session
 from models import Rider, RiderStatus, Order, OrderStatus
 from services.road_routing import get_road_route
 
-STEP_SIZE = 0.015  
+# EXACTLY 80 KM/H
+# 0.0002 degrees per second * 111 km/degree * 3600 seconds/hour = ~80 km/h
+STEP_SIZE = 0.0002  
 
 async def simulation_tick(
     db: Session,
@@ -39,42 +41,45 @@ async def simulation_tick(
 
             route = await get_road_route(rider.lat, rider.lng, target_lat, target_lng)
             
-            # Default target is the final destination
+            # Default fallback target
             move_target_lat, move_target_lng = target_lat, target_lng
             
             if route and len(route["coordinates"]) > 0:
                 current_route_coords = route["coordinates"]
                 
-                # Scan the route for the first waypoint that is actually ahead of the rider (> 11 meters away)
-                # This prevents the rider from getting permanently stuck on a microscopic waypoint
+                # "CARROT ON A STICK" LOGIC (Swiggy/Zomato style)
+                # Look ahead on the road path for a point at least 35 meters (0.0003 deg) away.
+                # This guarantees smooth road-following and prevents getting stuck on micro-nodes.
                 for lng, lat in route["coordinates"]:
-                    dist = ((lat - rider.lat)**2 + (lng - rider.lng)**2)**0.5
-                    if dist > 0.0001:
+                    dist_to_node = ((lat - rider.lat)**2 + (lng - rider.lng)**2)**0.5
+                    if dist_to_node > 0.0003: 
                         move_target_lat = lat
                         move_target_lng = lng
                         break
 
-            # Move rider towards the chosen target
+            # Move rider towards the chosen road target
             d_lat = move_target_lat - rider.lat
             d_lng = move_target_lng - rider.lng
             distance = (d_lat**2 + d_lng**2)**0.5
             
             if distance > 0:
+                # Do not overshoot the target node
                 move_dist = min(STEP_SIZE, distance)
                 rider.lat += (d_lat / distance) * move_dist
                 rider.lng += (d_lng / distance) * move_dist
                 
-                # Calculate speed: 1 degree ~ 111km, 1 tick = 1 sec
+                # Convert coordinate movement directly to realistic km/h
                 speed_kmh = int(move_dist * 111 * 3600)
 
-            # Check arrival threshold (approx 55 meters)
+            # ARRIVAL GEOFENCE (~55 meters)
+            # Checked against all active orders so batch pickups/deliveries work
             for order in active_orders:
                 o_lat = order.pickup_lat if order.status == OrderStatus.ASSIGNED else order.delivery_lat
                 o_lng = order.pickup_lng if order.status == OrderStatus.ASSIGNED else order.delivery_lng
                 
-                dist_to_target = ((o_lat - rider.lat)**2 + (o_lng - rider.lng)**2)**0.5
+                dist_to_final = ((o_lat - rider.lat)**2 + (o_lng - rider.lng)**2)**0.5
                 
-                if dist_to_target < 0.0005: 
+                if dist_to_final < 0.0005: 
                     if order.status == OrderStatus.ASSIGNED:
                         order.status = OrderStatus.IN_TRANSIT
                         print(f"ORDER {order.id}: Picked up!")

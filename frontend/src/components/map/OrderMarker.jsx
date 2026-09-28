@@ -5,9 +5,8 @@ import { ORDER_STATUS_COLOR, ORDER_STATUS_LABEL } from "../../lib/statusColors";
 import { api } from "../../api/client";
 import { useAppState } from "../../store/useAppState"; 
 
-// Helper to calculate distance for live speed
 function getDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371; // Radius of Earth in km
+  const R = 6371; 
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
   const a =
@@ -62,7 +61,7 @@ export default function OrderMarker({ order }) {
     setSpeed(null);
   }, [order.rider_id]);
 
-  // 1. Calculate live speed (km/h) whenever the rider moves
+  // 1. Calculate live speed (km/h)
   useEffect(() => {
     if (!riderIsActive) {
       setSpeed(null);
@@ -90,7 +89,7 @@ export default function OrderMarker({ order }) {
     }
   }, [rider?.lat, rider?.lng, riderIsActive]);
 
-  // 2. Fetch remaining route. Updates dynamically as rider.lat/lng changes.
+  // 2. Fetch route ONLY when order status changes to prevent API spam
   useEffect(() => {
     let isCancelled = false;
 
@@ -104,8 +103,6 @@ export default function OrderMarker({ order }) {
         if (!isCancelled && data) {
           setRoute({
             positions: data.coordinates.map(([lng, lat]) => [lat, lng]),
-            distanceKm: data.distance / 1000,
-            durationMin: data.duration / 60,
           });
         }
       } catch (err) {
@@ -118,10 +115,26 @@ export default function OrderMarker({ order }) {
     return () => {
       isCancelled = true;
     };
-  }, [isRoutable, order.status, rider?.lat, rider?.lng]);
+  }, [isRoutable, order.status, order.id]); 
 
   const routeLabel =
     order.status === "IN_TRANSIT" ? "Rider → Delivery" : "Rider → Pickup";
+
+  // 3. Dynamically calculate distance and time ticking down
+  let liveRemainingKm = 0;
+  let liveRemainingMin = 0;
+
+  if (isRoutable && rider) {
+    const destLat = order.status === "ASSIGNED" ? order.pickup_lat : order.delivery_lat;
+    const destLng = order.status === "ASSIGNED" ? order.pickup_lng : order.delivery_lng;
+    
+    // 1.25 multiplier accounts for road curves instead of a straight line
+    liveRemainingKm = getDistance(rider.lat, rider.lng, destLat, destLng) * 1.25;
+    
+    // Use actual moving speed, or fallback to 40km/h average if temporarily stopped
+    const currentSpeed = speed > 5 ? speed : 40; 
+    liveRemainingMin = (liveRemainingKm / currentSpeed) * 60;
+  }
 
   return (
     <>
@@ -162,20 +175,19 @@ export default function OrderMarker({ order }) {
                         <div className="flex justify-between">
                           <span className="opacity-70">Speed:</span>
                           <span className="font-mono">
-                            {/* Uses the locally calculated speed state instead of rider?.speed */}
                             {speed !== null ? `${Math.round(speed)} km/h` : "0 km/h"}
                           </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="opacity-70">Remaining Dist:</span>
                           <span className="font-mono">
-                            {route.distanceKm.toFixed(2)} km
+                            {liveRemainingKm.toFixed(2)} km
                           </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="opacity-70">Remaining Time:</span>
                           <span className="font-mono">
-                            {Math.round(route.durationMin)} min
+                            {Math.ceil(liveRemainingMin)} min
                           </span>
                         </div>
                       </div>
