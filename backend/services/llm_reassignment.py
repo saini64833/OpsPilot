@@ -6,7 +6,7 @@ from models import Order, Rider, RiderStatus, OrderStatus
 from schemas.llm_outputs import ReassignmentPlan
 from services.llm_address_cleanup import _call_llm, _strip_code_fence
 from services.routing import haversine
-
+from services.road_routing import get_road_route
 SYSTEM_PROMPT = (
     "You are a dispatch assistant. Given a broken-down rider's remaining "
     "orders and the current state of other riders, propose a reassignment "
@@ -21,7 +21,7 @@ SYSTEM_PROMPT = (
 )
 
 
-def propose_reassignment(db: Session, broken_rider: Rider) -> ReassignmentPlan:
+async def propose_reassignment(db: Session, broken_rider: Rider) -> ReassignmentPlan:
     """Builds context, calls the LLM, validates its JSON shape, then
     re-validates every suggestion against real capacity/existence before
     returning it. This function only reads state - it never assigns
@@ -37,7 +37,13 @@ def propose_reassignment(db: Session, broken_rider: Rider) -> ReassignmentPlan:
         .filter(Rider.status == RiderStatus.ACTIVE, Rider.id != broken_rider.id)
         .all()
     )
+    async def road_km(r, o):
+        route = await get_road_route(r.lat, r.lng, o.pickup_lat, o.pickup_lng)
+        return round(route["distance"] / 1000, 2) if route else None
 
+    road_distances = {
+        r.id: {o.id: await road_km(r, o) for o in orders} for r in other_riders
+    }
     context = {
         "orders": [
             {
@@ -53,10 +59,7 @@ def propose_reassignment(db: Session, broken_rider: Rider) -> ReassignmentPlan:
             {
                 "rider_id": r.id,
                 "remaining_capacity": r.remaining_capacity,
-                "distances_to_pickups_km": {
-                    o.id: round(haversine(r.lat, r.lng, o.pickup_lat, o.pickup_lng), 2)
-                    for o in orders
-                },
+                "distances_to_pickups_km": road_distances[r.id],
             }
             for r in other_riders
         ],

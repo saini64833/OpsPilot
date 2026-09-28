@@ -5,21 +5,41 @@ from sqlalchemy.orm import Session
 from models import Rider, RiderStatus, Order, OrderStatus
 from services.road_routing import get_road_route
 
-# EXACTLY 80 KM/H
-# 0.0002 degrees per second * 111 km/degree * 3600 seconds/hour = ~80 km/h
+# EXACTLY 80 KM/H (~0.0002 degrees/sec)
 STEP_SIZE = 0.0002  
+
+# In-memory route cache: stores current polyline and progress index per rider
+# Structure: {rider_id: {"leg": (order_id, status), "coords": [[lng, lat], ...], "index": int}}
+_rider_routes: dict[str, dict] = {}
+
 
 async def simulation_tick(
     db: Session,
     broadcast: Callable[[dict], Awaitable[None]]
 ):
-    riders = db.query(Rider).filter(Rider.status == RiderStatus.ACTIVE).all()
+    # FIX 1: Fetch both ACTIVE and BREAKDOWN riders so the frontend map doesn't crash
+    riders = db.query(Rider).filter(
+        Rider.status.in_([RiderStatus.ACTIVE, RiderStatus.BREAKDOWN])
+    ).all()
+    
     if not riders:
         return
 
     riders_payload = []
 
     for rider in riders:
+        # If the rider is broken down, broadcast their location for the dispatcher but do not move them
+        if rider.status == RiderStatus.BREAKDOWN:
+            riders_payload.append({
+                "id": rider.id,
+                "lat": rider.lat,
+                "lng": rider.lng,
+                "status": rider.status.value,
+                "route": None,
+                "speed": 0
+            })
+            continue
+
         active_orders = (
             db.query(Order)
             .filter(
@@ -34,45 +54,57 @@ async def simulation_tick(
         
         if active_orders:
             primary_order = active_orders[0]
+            current_leg = (str(primary_order.id), primary_order.status.value)
+            
             if primary_order.status == OrderStatus.ASSIGNED:
                 target_lat, target_lng = primary_order.pickup_lat, primary_order.pickup_lng
             else:
                 target_lat, target_lng = primary_order.delivery_lat, primary_order.delivery_lng
 
-            route = await get_road_route(rider.lat, rider.lng, target_lat, target_lng)
-            
-            # Default fallback target
-            move_target_lat, move_target_lng = target_lat, target_lng
-            
-            if route and len(route["coordinates"]) > 0:
-                current_route_coords = route["coordinates"]
-                
-                # "CARROT ON A STICK" LOGIC (Swiggy/Zomato style)
-                # Look ahead on the road path for a point at least 35 meters (0.0003 deg) away.
-                # This guarantees smooth road-following and prevents getting stuck on micro-nodes.
-                for lng, lat in route["coordinates"]:
-                    dist_to_node = ((lat - rider.lat)**2 + (lng - rider.lng)**2)**0.5
-                    if dist_to_node > 0.0003: 
-                        move_target_lat = lat
-                        move_target_lng = lng
-                        break
+            cached = _rider_routes.get(str(rider.id))
+            if not cached or cached.get("leg") != current_leg or not cached.get("coords"):
+                route = await get_road_route(rider.lat, rider.lng, target_lat, target_lng)
+                coords = route.get("coordinates", []) if route else []
+                _rider_routes[str(rider.id)] = {
+                    "leg": current_leg,
+                    "coords": coords,
+                    "index": 0
+                }
+                cached = _rider_routes[str(rider.id)]
 
-            # Move rider towards the chosen road target
-            d_lat = move_target_lat - rider.lat
-            d_lng = move_target_lng - rider.lng
-            distance = (d_lat**2 + d_lng**2)**0.5
-            
-            if distance > 0:
-                # Do not overshoot the target node
-                move_dist = min(STEP_SIZE, distance)
-                rider.lat += (d_lat / distance) * move_dist
-                rider.lng += (d_lng / distance) * move_dist
-                
-                # Convert coordinate movement directly to realistic km/h
-                speed_kmh = int(move_dist * 111 * 3600)
+            route_coords = cached["coords"]
+            current_route_coords = route_coords
 
-            # ARRIVAL GEOFENCE (~55 meters)
-            # Checked against all active orders so batch pickups/deliveries work
+            if route_coords and cached["index"] < len(route_coords):
+                remaining_step = STEP_SIZE
+                idx = cached["index"]
+
+                while remaining_step > 0 and idx < len(route_coords):
+                    tgt_lng, tgt_lat = route_coords[idx]
+                    d_lat = tgt_lat - rider.lat
+                    d_lng = tgt_lng - rider.lng
+                    dist = (d_lat**2 + d_lng**2)**0.5
+
+                    if dist <= remaining_step:
+                        rider.lat = tgt_lat
+                        rider.lng = tgt_lng
+                        remaining_step -= dist
+                        idx += 1
+                    else:
+                        rider.lat += (d_lat / dist) * remaining_step
+                        rider.lng += (d_lng / dist) * remaining_step
+                        remaining_step = 0
+
+                cached["index"] = idx
+                speed_kmh = int((STEP_SIZE - remaining_step) * 111 * 3600)
+                
+            elif route_coords and cached["index"] >= len(route_coords):
+                # FIX 2: Safety Catch. If out of road network, snap directly to target to trigger geofence.
+                rider.lat = target_lat
+                rider.lng = target_lng
+                speed_kmh = 10
+
+            # ARRIVAL GEOFENCE
             for order in active_orders:
                 o_lat = order.pickup_lat if order.status == OrderStatus.ASSIGNED else order.delivery_lat
                 o_lng = order.pickup_lng if order.status == OrderStatus.ASSIGNED else order.delivery_lng
@@ -82,11 +114,14 @@ async def simulation_tick(
                 if dist_to_final < 0.0005: 
                     if order.status == OrderStatus.ASSIGNED:
                         order.status = OrderStatus.IN_TRANSIT
-                        print(f"ORDER {order.id}: Picked up!")
+                        _rider_routes.pop(str(rider.id), None)
                     elif order.status == OrderStatus.IN_TRANSIT:
                         order.status = OrderStatus.DELIVERED
                         rider.current_load -= order.weight
-                        print(f"ORDER {order.id}: Delivered!")
+                        _rider_routes.pop(str(rider.id), None)
+
+        else:
+            _rider_routes.pop(str(rider.id), None)
 
         riders_payload.append({
             "id": rider.id,
@@ -103,7 +138,6 @@ async def simulation_tick(
         "type": "riders_updated",
         "riders": riders_payload,
     })
-
 
 async def run_simulator(
     session_factory,

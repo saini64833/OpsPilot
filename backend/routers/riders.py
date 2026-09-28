@@ -101,7 +101,7 @@ async def restore_rider(
 
 
 @router.post("/{rider_id}/breakdown")
-def breakdown_rider(
+async def breakdown_rider(
     rider_id: str,
     db: Session = Depends(get_db),
 ):
@@ -159,8 +159,7 @@ def breakdown_rider(
     # ---------------------------------------------------------
 
     try:
-        plan = propose_reassignment(db, rider)
-
+        plan = await propose_reassignment(db, rider)
     except Exception as e:
         log_action(
             db,
