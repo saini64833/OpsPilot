@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 from sqlalchemy.orm import Session
@@ -22,11 +23,6 @@ SYSTEM_PROMPT = (
 )
 
 async def propose_reassignment(db: Session, broken_rider: Rider) -> ReassignmentPlan:
-    """Builds context, calls the LLM, validates its JSON shape, then
-    re-validates every suggestion against real capacity/existence before
-    returning it. This function only reads state - it never assigns
-    anything; that happens in routers/proposals.py after dispatcher accept.
-    """
     orders = (
         db.query(Order)
         .filter(Order.rider_id == broken_rider.id, Order.status == OrderStatus.ASSIGNED)
@@ -37,15 +33,22 @@ async def propose_reassignment(db: Session, broken_rider: Rider) -> Reassignment
         .filter(Rider.status == RiderStatus.ACTIVE, Rider.id != broken_rider.id)
         .all()
     )
-    
+
     async def road_km(r, o):
         route = await get_road_route(r.lat, r.lng, o.pickup_lat, o.pickup_lng)
         return round(route["distance"] / 1000, 2) if route else None
 
-    road_distances = {
-        r.id: {o.id: await road_km(r, o) for o in orders} for r in other_riders
-    }
-    
+    # Fire every rider x order lookup CONCURRENTLY. The previous version
+    # awaited these one at a time inside nested loops - with N riders and M
+    # orders that's N x M sequential OSRM round trips (each with its own
+    # retry/backoff), which is exactly what made a breakdown feel stuck or
+    # unresponsive rather than just slow.
+    pairs = [(r, o) for r in other_riders for o in orders]
+    results = await asyncio.gather(*(road_km(r, o) for r, o in pairs)) if pairs else []
+    road_distances: dict[str, dict[str, float | None]] = {r.id: {} for r in other_riders}
+    for (r, o), km in zip(pairs, results):
+        road_distances[r.id][o.id] = km
+
     context = {
         "orders": [
             {
@@ -67,10 +70,11 @@ async def propose_reassignment(db: Session, broken_rider: Rider) -> Reassignment
         ],
     }
 
-    # API failures here will now be caught and retried by the decorator in _call_llm
-    content = _call_llm(SYSTEM_PROMPT, json.dumps(context))
+    # Run the blocking LLM call in a thread so it doesn't freeze the event
+    # loop (and therefore the live map's WebSocket updates) while it retries.
+    content = await asyncio.to_thread(_call_llm, SYSTEM_PROMPT, json.dumps(context))
     data = json.loads(_strip_code_fence(content))
-    plan = ReassignmentPlan(**data)  # raises on malformed schema
+    plan = ReassignmentPlan(**data)
 
     rider_by_id = {r.id: r for r in other_riders}
     order_by_id = {o.id: o for o in orders}

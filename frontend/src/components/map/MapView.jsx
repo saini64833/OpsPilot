@@ -18,10 +18,8 @@ const TILE_ATTRIBUTION = CARTO_KEY
 export default function MapView() {
   const { state } = useAppState();
   const riders = Object.values(state.riders);
-  
-  // FIX: Filter out delivered orders so they are removed from the map
   const activeOrders = Object.values(state.orders).filter(
-    (order) => order.status !== "delivered"
+    (order) => order.status !== "DELIVERED"
   );
 
   return (

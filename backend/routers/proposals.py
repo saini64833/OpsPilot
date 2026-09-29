@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -13,13 +14,12 @@ from models import (
 from schemas.proposal import ProposalOut, ProposalResolve
 from services.audit import log_action
 
-
 router = APIRouter(prefix="/proposals", tags=["proposals"])
 
 
 @router.get("/", response_model=list[ProposalOut])
 def list_proposals(
-    status: str | None = None,
+    status: Optional[ProposalStatus] = None,
     db: Session = Depends(get_db),
 ):
     q = db.query(Proposal)
@@ -28,7 +28,6 @@ def list_proposals(
         q = q.filter(Proposal.status == status)
 
     return q.all()
-
 
 @router.post("/{proposal_id}/accept", response_model=ProposalOut)
 def accept_proposal(

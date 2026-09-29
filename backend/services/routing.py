@@ -1,3 +1,4 @@
+import asyncio
 import math
 from sqlalchemy.orm import Session
 from models import Order, Rider, OrderStatus, RiderStatus
@@ -30,7 +31,6 @@ async def score_rider_for_order(rider: Rider, order: Order) -> float:
         end_lng=order.pickup_lng,
     )
     
-    # If there is no road connecting them, disqualify the rider completely
     if not route_data:
         return float('inf')
         
@@ -47,13 +47,16 @@ async def find_best_rider(db: Session, order: Order) -> Rider | None:
     if not eligible:
         return None
 
-    rider_scores = {}
-    for rider in eligible:
-        rider_scores[rider.id] = await score_rider_for_order(rider, order)
+    # Score every eligible rider's route CONCURRENTLY instead of one at a
+    # time. The old sequential version made one order creation wait on N
+    # back-to-back OSRM round trips (with retries each) - with 3+ riders and
+    # a slow/unreachable router this could take 10+ seconds and looked like
+    # assignment was broken or hanging.
+    scores = await asyncio.gather(*(score_rider_for_order(r, order) for r in eligible))
+    rider_scores = dict(zip((r.id for r in eligible), scores))
 
     eligible.sort(key=lambda rider: rider_scores[rider.id])
 
-    # Ensure the top rider actually has a valid road route
     if rider_scores[eligible[0].id] == float('inf'):
         return None
 

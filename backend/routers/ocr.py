@@ -9,7 +9,7 @@ from services.llm_address_cleanup import clean_address
 from services.ocr_service import run_ocr
 from services.routing import assign_order
 from services.geocoder import get_coordinates_from_text 
-
+import asyncio
 router = APIRouter(prefix="/orders", tags=["ocr"])
 
 @router.post("/{order_id}/ocr")
@@ -38,7 +38,7 @@ async def process_photo_order(order_id: str, file: UploadFile = File(...), db: S
 
     # 2. Run LLM Cleanup
     try:
-        cleaned = clean_address(raw_text)
+        cleaned = await asyncio.to_thread(clean_address, raw_text)
     except Exception as e:
         log_action(db, "order", order.id, "system", "llm_parse_error", notes=str(e))
         order.status = OrderStatus.UNPLACED
