@@ -1,4 +1,4 @@
-// frontend/src/components/map/MapView.jsx
+import "leaflet/dist/leaflet.css"; 
 import { MapContainer, TileLayer, Polyline } from "react-leaflet";
 import RiderMarker from "./RiderMarker";
 import OrderMarker from "./OrderMarker";
@@ -18,7 +18,11 @@ const TILE_ATTRIBUTION = CARTO_KEY
 export default function MapView() {
   const { state } = useAppState();
   const riders = Object.values(state.riders);
-  const orders = Object.values(state.orders);
+  
+  // FIX: Filter out delivered orders so they are removed from the map
+  const activeOrders = Object.values(state.orders).filter(
+    (order) => order.status !== "delivered"
+  );
 
   return (
     <MapContainer
@@ -33,21 +37,20 @@ export default function MapView() {
         <div key={rider.id}>
           <RiderMarker rider={rider} />
           
-          {/* Only draw path if rider is active and has a route */}
           {rider.status === "active" && rider.route && (
             <Polyline
-              // Backend sends [lng, lat], Leaflet expects [lat, lng]
               positions={rider.route.map((coord) => [coord[1], coord[0]])}
-              color="#3b82f6" // Blue path color
+              color="#3b82f6"
               weight={4}
-              dashArray="6, 8" // Optional: makes the line dashed
+              dashArray="6, 8"
               opacity={0.7}
             />
           )}
         </div>
       ))}
       
-      {orders.map((order) => (
+      {/* Render only the active (non-delivered) orders */}
+      {activeOrders.map((order) => (
         <OrderMarker key={order.id} order={order} />
       ))}
     </MapContainer>

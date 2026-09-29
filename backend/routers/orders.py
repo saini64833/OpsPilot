@@ -61,7 +61,13 @@ async def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
         order.delivery_lat = delivery_lat
         order.delivery_lng = delivery_lng
 
-    await assign_order(db, order)
+    # FIX: ONLY assign the order if we successfully acquired delivery coordinates.
+    # Otherwise, it must wait in the UNPLACED state for OCR or dispatcher input.
+    if order.delivery_lat is not None and order.delivery_lng is not None:
+        await assign_order(db, order)
+    else:
+        order.status = OrderStatus.UNPLACED
+
     log_action(
         db,
         "order",
@@ -73,7 +79,6 @@ async def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(order)
     return order
-
 
 @router.get("/{order_id}", response_model=OrderOut)
 def get_order(order_id: str, db: Session = Depends(get_db)):

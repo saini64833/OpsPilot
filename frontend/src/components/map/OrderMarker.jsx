@@ -199,6 +199,16 @@ export default function OrderMarker({ order }) {
                     {rider.status === "offline" ? "offline" : "broken down"} —
                     tracking paused, awaiting reassignment
                   </div>
+                ) : order.status === "DELIVERED" ? (
+                  // FIX: Explicitly handle delivered status
+                  <div className="text-xs opacity-60">
+                    Order successfully delivered
+                  </div>
+                ) : order.status === "FAILED" ? (
+                  // FIX: Explicitly handle failed status
+                  <div className="text-xs" style={{ color: "#f87171" }}>
+                    Delivery failed
+                  </div>
                 ) : (
                   <div className="text-xs opacity-60">
                     Metrics available once assigned

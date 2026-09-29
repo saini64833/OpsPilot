@@ -1,8 +1,6 @@
 import { useEffect, useRef } from "react";
 import { BASE_URL } from "./client";
 
-// Subscribes to the backend's live WebSocket feed
-// and calls onMessage for every parsed event.
 export function useLiveStream(onMessage) {
   const wsRef = useRef(null);
   const onMessageRef = useRef(onMessage);
@@ -10,8 +8,15 @@ export function useLiveStream(onMessage) {
   onMessageRef.current = onMessage;
 
   useEffect(() => {
-    const wsUrl = BASE_URL.replace(/^http/, "ws") + "/ws";
+    const getWsUrl = () => {
+      if (BASE_URL.startsWith("http")) {
+        return BASE_URL.replace(/^http/, "ws") + "/ws";
+      }
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      return `${protocol}//${window.location.host}${BASE_URL}/ws`;
+    };
 
+    const wsUrl = getWsUrl();
     let socket = null;
     let reconnectTimer = null;
     let cancelled = false;
@@ -20,7 +25,6 @@ export function useLiveStream(onMessage) {
       if (cancelled) return;
 
       console.log("Connecting WebSocket:", wsUrl);
-
       socket = new WebSocket(wsUrl);
       wsRef.current = socket;
 
@@ -31,13 +35,9 @@ export function useLiveStream(onMessage) {
       socket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-
-          console.log("WebSocket message:", data);
-
           onMessageRef.current(data);
         } catch (e) {
           console.error("Failed to parse live update:", e);
-          console.error("Raw WebSocket message:", event.data);
         }
       };
 
@@ -46,14 +46,6 @@ export function useLiveStream(onMessage) {
       };
 
       socket.onclose = (event) => {
-        console.log(
-          "WebSocket disconnected",
-          "code:",
-          event.code,
-          "reason:",
-          event.reason
-        );
-
         if (!cancelled) {
           reconnectTimer = setTimeout(() => {
             connect();
@@ -66,11 +58,8 @@ export function useLiveStream(onMessage) {
 
     return () => {
       cancelled = true;
-
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-      }
-
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      
       if (
         socket &&
         socket.readyState !== WebSocket.CLOSED &&
@@ -78,7 +67,6 @@ export function useLiveStream(onMessage) {
       ) {
         socket.close();
       }
-
       wsRef.current = null;
     };
   }, []);

@@ -5,7 +5,7 @@ import asyncio
 from database import Base, engine, SessionLocal
 from models import Rider, Order, RiderStatus
 from services.routing import assign_order
-
+from services.audit import log_action
 # Clears out old data so you get a fresh map every time you run this script
 Base.metadata.drop_all(bind=engine)
 Base.metadata.create_all(bind=engine)
@@ -42,11 +42,19 @@ orders = [
 db.add_all(orders)
 db.flush()  # give each order an id before assignment references it
 
-
 async def assign_all():
     for order in orders:
         await assign_order(db, order)
-
+        
+        # Tilføj log_action her for at registrere tildelingen i databasen
+        log_action(
+            db,
+            "order",
+            order.id,
+            "system",
+            "order_created",
+            after_state={"status": order.status.value, "rider_id": order.rider_id},
+        )
 
 asyncio.run(assign_all())
 db.commit()

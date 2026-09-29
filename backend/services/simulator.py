@@ -5,21 +5,16 @@ from sqlalchemy.orm import Session
 from models import Rider, RiderStatus, Order, OrderStatus
 from services.road_routing import get_road_route
 
-# EXACTLY 80 KM/H (~0.0002 degrees/sec)
-STEP_SIZE = 0.0002  
+STEP_SIZE = 0.00015  
 
-# In-memory route cache: stores current polyline and progress index per rider
-# Structure: {rider_id: {"leg": (order_id, status), "coords": [[lng, lat], ...], "index": int}}
 _rider_routes: dict[str, dict] = {}
-
 
 async def simulation_tick(
     db: Session,
     broadcast: Callable[[dict], Awaitable[None]]
 ):
-    # FIX 1: Fetch both ACTIVE and BREAKDOWN riders so the frontend map doesn't crash
     riders = db.query(Rider).filter(
-        Rider.status.in_([RiderStatus.ACTIVE, RiderStatus.BREAKDOWN])
+        Rider.status.in_([RiderStatus.ACTIVE, RiderStatus.BROKEN_DOWN])
     ).all()
     
     if not riders:
@@ -28,8 +23,8 @@ async def simulation_tick(
     riders_payload = []
 
     for rider in riders:
-        # If the rider is broken down, broadcast their location for the dispatcher but do not move them
-        if rider.status == RiderStatus.BREAKDOWN:
+        # FIX: Changed from BREAKDOWN to BROKEN_DOWN
+        if rider.status == RiderStatus.BROKEN_DOWN:
             riders_payload.append({
                 "id": rider.id,
                 "lat": rider.lat,
@@ -85,6 +80,11 @@ async def simulation_tick(
                     d_lng = tgt_lng - rider.lng
                     dist = (d_lat**2 + d_lng**2)**0.5
 
+                    # Prevent ZeroDivisionError when rider is exactly on the node
+                    if dist == 0:
+                        idx += 1
+                        continue
+
                     if dist <= remaining_step:
                         rider.lat = tgt_lat
                         rider.lng = tgt_lng
@@ -99,12 +99,10 @@ async def simulation_tick(
                 speed_kmh = int((STEP_SIZE - remaining_step) * 111 * 3600)
                 
             elif route_coords and cached["index"] >= len(route_coords):
-                # FIX 2: Safety Catch. If out of road network, snap directly to target to trigger geofence.
                 rider.lat = target_lat
                 rider.lng = target_lng
                 speed_kmh = 10
 
-            # ARRIVAL GEOFENCE
             for order in active_orders:
                 o_lat = order.pickup_lat if order.status == OrderStatus.ASSIGNED else order.delivery_lat
                 o_lng = order.pickup_lng if order.status == OrderStatus.ASSIGNED else order.delivery_lng

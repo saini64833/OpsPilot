@@ -1,5 +1,5 @@
 """
-Local OCR service using Microsoft's TrOCR printed-text model.
+Local OCR service using Microsoft's TrOCR handwritten-text model.
 
 The model is loaded once and then reused for subsequent OCR requests.
 No external OCR API is used.
@@ -44,13 +44,11 @@ def _load_model():
 
     if _model is None:
         _processor = TrOCRProcessor.from_pretrained(
-            "microsoft/trocr-base-printed"
+            "microsoft/trocr-base-handwritten"
         )
-
         _model = VisionEncoderDecoderModel.from_pretrained(
-            "microsoft/trocr-base-printed"
+            "microsoft/trocr-base-handwritten"
         )
-
         _model.eval()
 
     return _processor, _model
@@ -59,27 +57,17 @@ def _load_model():
 def run_ocr(image_bytes: bytes) -> tuple[str, float]:
     """
     Run OCR on image bytes.
-
-    Returns:
-        (raw_text, confidence)
-
-    confidence is approximately between 0 and 1.
     """
-
     processor, model = _load_model()
 
     # Open uploaded image
-    image = Image.open(
-        io.BytesIO(image_bytes)
-    ).convert("RGB")
-    image = auto_crop_whitespace(image)
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     
     # ---------------------------------
     # 1. Upscale small images
     # ---------------------------------
     if image.width < 1200:
         scale = 1200 / image.width
-
         image = image.resize(
             (
                 int(image.width * scale),
@@ -89,17 +77,14 @@ def run_ocr(image_bytes: bytes) -> tuple[str, float]:
         )
 
     # ---------------------------------
-    # 2. Convert to grayscale
+    # 2. Gentle enhancement for photos
     # ---------------------------------
-    image = image.convert("RGB")
-    
-    # ---------------------------------
-    # 3. Increase contrast
-    # ---------------------------------
-    image = ImageEnhance.Contrast(image).enhance(2.0)
+    # Do not auto-crop based on top-left pixel.
+    # Tone down contrast enhancement so pen strokes aren't blown out.
+    image = ImageEnhance.Contrast(image).enhance(1.2)
 
     # ---------------------------------
-    # 4. Prepare image for TrOCR
+    # 3. Prepare image for TrOCR
     # ---------------------------------
     pixel_values = processor(
         images=image,
@@ -107,26 +92,27 @@ def run_ocr(image_bytes: bytes) -> tuple[str, float]:
     ).pixel_values
 
     # ---------------------------------
-    # 5. Run model inference
+    # 4. Run model inference
     # ---------------------------------
     with torch.no_grad():
         outputs = model.generate(
             pixel_values,
             output_scores=True,
             return_dict_in_generate=True,
-            max_new_tokens=100, # FIX: Allows up to 100 tokens to prevent cut-offs
+            max_new_tokens=100,
         )
 
     # ---------------------------------
-    # 6. Convert tokens to text
+    # 5. Convert tokens to text
     # ---------------------------------
     text = processor.batch_decode(
         outputs.sequences,
         skip_special_tokens=True,
+        clean_up_tokenization_spaces=True, 
     )[0].strip()
     
     # ---------------------------------
-    # 7. Estimate confidence
+    # 6. Estimate confidence
     # ---------------------------------
     try:
         probs = [
@@ -141,10 +127,6 @@ def run_ocr(image_bytes: bytes) -> tuple[str, float]:
         )
 
     except Exception:
-        confidence = (
-            0.5
-            if len(text) > 4
-            else 0.1
-        )
+        confidence = 0.5 if len(text) > 4 else 0.1
 
     return text, float(confidence)

@@ -7,6 +7,7 @@ from schemas.llm_outputs import ReassignmentPlan
 from services.llm_address_cleanup import _call_llm, _strip_code_fence
 from services.routing import haversine
 from services.road_routing import get_road_route
+
 SYSTEM_PROMPT = (
     "You are a dispatch assistant. Given a broken-down rider's remaining "
     "orders and the current state of other riders, propose a reassignment "
@@ -19,7 +20,6 @@ SYSTEM_PROMPT = (
     '{"proposals": [{"order_id": string, "suggested_rider_id": string|null, '
     '"reason": string}]}'
 )
-
 
 async def propose_reassignment(db: Session, broken_rider: Rider) -> ReassignmentPlan:
     """Builds context, calls the LLM, validates its JSON shape, then
@@ -37,6 +37,7 @@ async def propose_reassignment(db: Session, broken_rider: Rider) -> Reassignment
         .filter(Rider.status == RiderStatus.ACTIVE, Rider.id != broken_rider.id)
         .all()
     )
+    
     async def road_km(r, o):
         route = await get_road_route(r.lat, r.lng, o.pickup_lat, o.pickup_lng)
         return round(route["distance"] / 1000, 2) if route else None
@@ -44,6 +45,7 @@ async def propose_reassignment(db: Session, broken_rider: Rider) -> Reassignment
     road_distances = {
         r.id: {o.id: await road_km(r, o) for o in orders} for r in other_riders
     }
+    
     context = {
         "orders": [
             {
@@ -65,6 +67,7 @@ async def propose_reassignment(db: Session, broken_rider: Rider) -> Reassignment
         ],
     }
 
+    # API failures here will now be caught and retried by the decorator in _call_llm
     content = _call_llm(SYSTEM_PROMPT, json.dumps(context))
     data = json.loads(_strip_code_fence(content))
     plan = ReassignmentPlan(**data)  # raises on malformed schema
