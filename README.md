@@ -90,8 +90,8 @@ show the actual error message.
 |---|---|
 | Backend | Python, FastAPI, SQLAlchemy, Pydantic |
 | Database | PostgreSQL |
-| OCR | Hugging Face `transformers` + `torch`, `microsoft/trocr-base-handwritten` (local inference, no external OCR API) |
-| LLM | Google Gemini by default (`gemini-3.1-flash-lite`); Anthropic and OpenAI also supported via `LLM_PROVIDER` |
+| OCR | Hugging Face `transformers` + `torch`, `microsoft/trocr-base-printed` (local inference, no external OCR API) |
+| LLM | Google Gemini by default (`gemini-3.1-flash-lite`);  `LLM_PROVIDER` |
 | Geocoding | Photon (OpenStreetMap-based, via `geopy`) |
 | Road routing | OSRM public routing API, with a straight-line fallback |
 | Frontend | React (JavaScript), Vite, Tailwind CSS v4, React-Leaflet |
