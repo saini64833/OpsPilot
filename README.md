@@ -32,7 +32,7 @@ Built for the "Ops Copilot for Disrupted Deliveries" problem statement.
   order) live distance/ETA to its next stop.
 
 ### 3. Pretrained OCR pipeline (image → text → structured address)
-- **microsoft/trocr-base-handwritten** (Hugging Face `transformers` + `torch`) runs
+- **microsoft/trocr-base-printed** (Hugging Face `transformers` + `torch`) runs
   locally, in-process, to extract raw text from an uploaded photo.
 - The raw OCR text is passed to an LLM (Gemini by default; Anthropic/OpenAI also
   supported) which returns a structured, validated address (`street`, `city`,

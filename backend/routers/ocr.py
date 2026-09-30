@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
+import asyncio
 
 from config import settings
 from database import get_db
@@ -9,7 +10,7 @@ from services.llm_address_cleanup import clean_address
 from services.ocr_service import run_ocr
 from services.routing import assign_order
 from services.geocoder import get_coordinates_from_text 
-import asyncio
+
 router = APIRouter(prefix="/orders", tags=["ocr"])
 
 @router.post("/{order_id}/ocr")
@@ -22,7 +23,9 @@ async def process_photo_order(order_id: str, file: UploadFile = File(...), db: S
     image_bytes = await file.read()
     order.source = OrderSource.PHOTO
 
+    # ---------------------------------
     # 1. Run OCR
+    # ---------------------------------
     try:
         raw_text, ocr_conf = run_ocr(image_bytes)
     except Exception as e:
@@ -33,10 +36,16 @@ async def process_photo_order(order_id: str, file: UploadFile = File(...), db: S
 
     order.raw_ocr_text = raw_text
     order.ocr_confidence = ocr_conf
+    
+    # DEBUG: Print the exact text TrOCR extracted to your Docker terminal
+    print(f"\n--- WHAT OCR SAW (Conf: {ocr_conf}) ---\n{raw_text}\n---------------------------------------\n")
+    
     log_action(db, "order", order.id, "system", "ocr_extracted", raw_payload={"text": raw_text, "confidence": ocr_conf})
     db.commit()
 
+    # ---------------------------------
     # 2. Run LLM Cleanup
+    # ---------------------------------
     try:
         cleaned = await asyncio.to_thread(clean_address, raw_text)
     except Exception as e:
@@ -56,7 +65,9 @@ async def process_photo_order(order_id: str, file: UploadFile = File(...), db: S
     )
     log_action(db, "order", order.id, "system", "address_cleaned", raw_payload=cleaned.model_dump())
     
+    # ---------------------------------
     # 3. Geocode the address into map coordinates
+    # ---------------------------------
     lat, lng = get_coordinates_from_text(order.delivery_address)
     
     if not lat or not lng:
@@ -70,7 +81,9 @@ async def process_photo_order(order_id: str, file: UploadFile = File(...), db: S
     order.delivery_lat = lat
     order.delivery_lng = lng
 
+    # ---------------------------------
     # 4. Assign the order to a rider
+    # ---------------------------------
     await assign_order(db, order)
     db.commit()
     db.refresh(order)
