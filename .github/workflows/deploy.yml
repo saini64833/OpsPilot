@@ -15,6 +15,7 @@ jobs:
           host: ${{ secrets.AZURE_HOST }}
           username: ${{ secrets.AZURE_USERNAME }}
           key: ${{ secrets.AZURE_SSH_KEY }}
+          command_timeout: 30m
           script: |
             cd ~/OpsPilot
             git pull origin main
