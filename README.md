@@ -13,8 +13,7 @@ Built for the "Ops Copilot for Disrupted Deliveries" problem statement.
 
 ### 1. Order intake & routing
 - Orders are created with a pickup address, delivery address, weight, and priority.
-- Pickup/delivery addresses are geocoded server-side (Photon/OpenStreetMap) into
-  coordinates — the dispatcher never has to supply lat/lng manually.
+- Pickup/delivery addresses are geocoded server-side using a multi-provider strategy (Photon as primary, ArcGIS as fallback). If strict lookups fail, the system dynamically broadens the search by progressively removing granular address segments until a match is found — the dispatcher never has to supply lat/lng manually.
 - Assignment considers **remaining rider capacity**, **real road distance** (via OSRM,
   not straight-line), and **order priority**, not just "nearest rider."
 - When no active rider has capacity, the order is marked `UNASSIGNED` and stays
@@ -92,7 +91,7 @@ show the actual error message.
 | Database | PostgreSQL |
 | OCR | Hugging Face `transformers` + `torch`, `microsoft/trocr-base-printed` (local inference, no external OCR API) |
 | LLM | Google Gemini by default (`gemini-3.1-flash-lite`);  `LLM_PROVIDER` |
-| Geocoding | Photon (OpenStreetMap-based, via `geopy`) |
+| Geocoding | Photon and ArcGIS (via `geopy`) with progressive segment reduction |
 | Road routing | OSRM public routing API, with a straight-line fallback |
 | Frontend | React (JavaScript), Vite, Tailwind CSS v4, React-Leaflet |
 | Live updates | WebSocket |
